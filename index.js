@@ -5,16 +5,22 @@ var http = require("http").createServer(app);
 
 var io = require("socket.io")(http);
 
-var map = require("./client/map.js").map;
+var map = require("./map.js").map;
 // global variables
 var players = {};
-var spawnPoints = [{ x: 480, y: 1296 }, { x: 480, y: 0 }];
+var spawnPoints = [{
+  x: 480,
+  y: 1296
+}, {
+  x: 480,
+  y: 0
+}];
 
 var bullets = [];
 // serve files
 app.use("/client", express.static(__dirname + "/client"));
 
-app.get("/", function(req, res) {
+app.get("/", function (req, res) {
   res.sendFile(__dirname + "/client/index.html");
 });
 // utility functions
@@ -73,7 +79,7 @@ function respawn(id) {
   players[id].loaded = true;
 }
 // player connects
-io.on("connection", function(socket) {
+io.on("connection", function (socket) {
   console.log("an user connected; id: " + socket.id);
 
   var r = Math.round(Math.random());
@@ -85,8 +91,7 @@ io.on("connection", function(socket) {
     spawn: spawnPoints[r],
     w: 48,
     h: 48,
-    c:
-      "rgb(" +
+    c: "rgb(" +
       Math.random() * 255 +
       "," +
       Math.random() * 255 +
@@ -115,14 +120,14 @@ io.on("connection", function(socket) {
     bullets: bullets
   };
 
-  setInterval(function() {
+  setInterval(function () {
     // update bullets
     for (var obj of bullets) {
       obj.update();
     }
-  }, 1000 / 45);
+  }, 1000 / 60);
 
-  socket.on("username", function(data) {
+  socket.on("username", function (data) {
     // player chooses username
     console.log("username chosen: " + data);
     socket.player.user = data;
@@ -130,9 +135,8 @@ io.on("connection", function(socket) {
 
   socket.emit("init", data);
 
-  socket.on("clientUpdate", function(data) {
+  socket.on("clientUpdate", function (data) {
     // player pings server
-    if (data.keys.length !== 0) console.log(data.keys);
     // cheats
     socket.player.cVars = data.cVars;
     if (socket.player.cVars.invisible) socket.player.c = "rgba(0, 0, 0, 0)";
@@ -145,11 +149,11 @@ io.on("connection", function(socket) {
       socket.player.h = 48;
     }
     // input
-    var max = 4;
+    var max = 1;
     if (socket.player.cVars.superSpeed) {
       max = 20;
     } else if (data.keys.includes("Shift")) {
-      max = 6;
+      max = 2;
     }
     if (
       (data.keys.includes("w") ||
@@ -157,28 +161,28 @@ io.on("connection", function(socket) {
         data.keys.includes("ArrowUp")) &&
       socket.player.vx > -max
     )
-      socket.player.vy -= 2;
+      socket.player.vy -= 0.2;
     if (
       (data.keys.includes("a") ||
         data.keys.includes("A") ||
         data.keys.includes("ArrowLeft")) &&
       socket.player.vx > -max
     )
-      socket.player.vx -= 2;
+      socket.player.vx -= 0.2;
     if (
       (data.keys.includes("s") ||
         data.keys.includes("S") ||
         data.keys.includes("ArrowDown")) &&
       socket.player.vx < max
     )
-      socket.player.vy += 2;
+      socket.player.vy += 0.2;
     if (
       (data.keys.includes("d") ||
         data.keys.includes("D") ||
         data.keys.includes("ArrowRight")) &&
       socket.player.vx < max
     )
-      socket.player.vx += 2;
+      socket.player.vx += 0.2;
     // friction
     socket.player.vx *= 0.6;
     socket.player.vy *= 0.6;
@@ -223,11 +227,11 @@ io.on("connection", function(socket) {
         y: cy,
         w: 15,
         h: 10,
-        vx: Math.cos(angle) * 8,
-        vy: Math.sin(angle) * 8,
+        vx: Math.cos(angle) * 6,
+        vy: Math.sin(angle) * 6,
         dir: angle,
         c: "rgb(75, 75, 75)",
-        update: function() {
+        update: function () {
           var t = this; // for use in function scope
 
           this.x += this.vx;
@@ -238,7 +242,7 @@ io.on("connection", function(socket) {
             if (players[i] === undefined || players[i].user === undefined)
               continue;
             if (!rectCollision(t, players[i]) || players[i] === t.ply) continue;
-            if (!socket.player.cVars.godMode) players[i].health -= 25;
+            if (!players[i].cVars.godMode) players[i].health -= 25;
             if (players[i].health <= 0) {
               respawn(i);
               console.log("Player died: " + players[i].user);
@@ -258,7 +262,7 @@ io.on("connection", function(socket) {
 
       socket.player.loaded = false;
 
-      setTimeout(function() {
+      setTimeout(function () {
         // bullet decay
         if (bullets[b - 1] !== undefined) {
           if (bullets[b - 1].id === b - 1) {
@@ -267,7 +271,7 @@ io.on("connection", function(socket) {
         }
       }, 5000);
 
-      setTimeout(function() {
+      setTimeout(function () {
         // shooting cooldown
         socket.player.loaded = true;
       }, 500);
@@ -285,13 +289,13 @@ io.on("connection", function(socket) {
     socket.emit("serverUpdate", data);
   });
 
-  socket.on("disconnect", function() {
+  socket.on("disconnect", function () {
     // player disconnected
     players[String(socket.id)] = undefined;
     console.log("user disconnected");
   });
 });
 // start server
-http.listen(8080, function() {
+http.listen(8080, function () {
   console.log("listening");
 });

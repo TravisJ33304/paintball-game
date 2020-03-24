@@ -1,5 +1,7 @@
 // canvas
 let canvas, ctx;
+// Set the time between each frame
+const FPS = 60;
 // connect to server
 let socket = io();
 // input variables
@@ -71,7 +73,7 @@ socket.on("init", function(data) {
   player.tx = player.x + translationX;
   player.ty = player.y + translationY;
 
-  window.requestAnimationFrame(render());
+  render();
 
   data = {
     // send input variables
@@ -146,71 +148,74 @@ window.onload = function() {
 };
 
 function render() {
-  // clear canvas
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  window.setInterval(function() {
+    window.requestAnimationFrame(function() {
+      // clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (var layer of map) {
-    // draw map
-    for (var tile of layer) {
-      ctx.fillStyle = tile.c;
-      ctx.fillRect(tile.x + translationX, tile.y + translationY, 48, 48);
-    }
-  }
+      for (var layer of map) {
+        // draw map
+        for (var tile of layer) {
+          ctx.fillStyle = tile.c;
+          ctx.fillRect(tile.x + translationX, tile.y + translationY, 48, 48);
+        }
+      }
 
-  for (var i in players) {
-    // draw players
-    if (players[i].id === player.id || players[i].user === undefined) continue;
-    //draw player
-    ctx.fillStyle = players[i].c;
-    ctx.fillRect(
-      players[i].x + translationX,
-      players[i].y + translationY,
-      players[i].w,
-      players[i].h
-    );
-    // health bar
-    ctx.fillStyle = "rgb(255, 0, 0)";
-    ctx.fillRect(
-      players[i].x + translationX,
-      players[i].y + translationY - 25,
-      players[i].health / 2,
-      15
-    );
-    ctx.strokeRect(
-      players[i].x + translationX,
-      players[i].y + translationY - 25,
-      50,
-      15
-    );
-    // draw username
-    ctx.fillText(
-      players[i].user,
-      players[i].x + translationX,
-      players[i].y + translationY - 50
-    );
-  }
-  // draw player
-  ctx.fillStyle = player.c;
-  ctx.fillRect(player.tx, player.ty, player.w, player.h);
-  // draw healthbar on HUD
-  ctx.fillStyle = "rgb(255, 0, 0)";
-  ctx.fillRect(25, window.innerHeight - 50, player.health, 25);
-  ctx.strokeRect(25, window.innerHeight - 50, 100, 25);
+      for (var i in players) {
+        // draw players
+        if (players[i].id === player.id || players[i].user === undefined) continue;
+        //draw player
+        ctx.fillStyle = players[i].c;
+        ctx.fillRect(
+          players[i].x + translationX,
+          players[i].y + translationY,
+          players[i].w,
+          players[i].h
+        );
+        // health bar
+        ctx.fillStyle = "rgb(255, 0, 0)";
+        ctx.fillRect(
+          players[i].x + translationX,
+          players[i].y + translationY - 25,
+          players[i].health / 2,
+          15
+        );
+        ctx.strokeRect(
+          players[i].x + translationX,
+          players[i].y + translationY - 25,
+          50,
+          15
+        );
+        // draw username
+        ctx.fillText(
+          players[i].user,
+          players[i].x + translationX,
+          players[i].y + translationY - 50
+        );
+      }
+      // draw player
+      ctx.fillStyle = player.c;
+      ctx.fillRect(player.tx, player.ty, player.w, player.h);
+      // draw healthbar on HUD
+      ctx.fillStyle = "rgb(255, 0, 0)";
+      ctx.fillRect(25, window.innerHeight - 50, player.health, 25);
+      ctx.strokeRect(25, window.innerHeight - 50, 100, 25);
 
-  for (var obj of bullets) {
-    // draw bullets
-    let tx = obj.x + translationX;
-    let ty = obj.y + translationY;
-    // rotate canvas
-    ctx.save();
-    ctx.translate(tx, ty);
-    ctx.rotate(obj.dir);
-    ctx.translate(-tx, -ty);
-    // draw bullet
-    ctx.fillStyle = obj.c;
-    ctx.fillRect(tx, ty, obj.w, obj.h);
-    // revert canvas rotation
-    ctx.restore();
-  }
-  window.requestAnimationFrame(render());
+      for (var obj of bullets) {
+        // draw bullets
+        let tx = obj.x + translationX;
+        let ty = obj.y + translationY;
+        // rotate canvas
+        ctx.save();
+        ctx.translate(tx, ty);
+        ctx.rotate(obj.dir);
+        ctx.translate(-tx, -ty);
+        // draw bullet
+        ctx.fillStyle = obj.c;
+        ctx.fillRect(tx, ty, obj.w, obj.h);
+        // revert canvas rotation
+        ctx.restore();
+      }
+    });
+  }, 1000/FPS);
 }
