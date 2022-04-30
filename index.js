@@ -1,28 +1,179 @@
 // dependencies
-var express = require("express");
-var app = express();
-var http = require("http").createServer(app);
+let express = require("express");
+let app = express();
+let http = require("http").createServer(app);
 
-var io = require("socket.io")(http);
+let io = require("socket.io")(http);
 
-var map = require("./map.js").map;
+let map = require("./map.js").map;
 // global variables
-var players = {};
-var spawnPoints = [{
+const TPS = 60; // game ticks/second
+const PORT = 8080; // game server port
+// track game objects
+let players = [];
+let paintballs = [];
+// spawn positions
+let spawnPoints = [{
   x: 480,
   y: 1296
 }, {
   x: 480,
   y: 0
 }];
-
-var bullets = [];
-// serve files
+// serve files to client
 app.use("/client", express.static(__dirname + "/client"));
-
 app.get("/", function (req, res) {
   res.sendFile(__dirname + "/client/index.html");
 });
+// object classes
+function Player(socket) {
+  // determine players team
+  let side = players.length % 2;
+  let team = side ? "red" : "blue";
+  // create object
+  return {
+    id: socket.id,
+    spawn: spawnPoints[side],
+    x: this.spawn.x,
+    y: this.spawn.y,
+    w: 48,
+    h: 48,
+    c: team,
+    oc: this.c,
+    loaded: true,
+    health: 100,
+    vx: 0,
+    vy: 0,
+    input: {
+      mouse: {
+        x: 0,
+        y: 0,
+        down: false
+      },
+      keys: [],
+      cVars: {
+        godMode: false,
+        invisible: false,
+        smallPlayer: false,
+        superSpeed: false
+      }
+    },
+    update: function() {
+      var self = this; // scoping purposes
+      // console cheats
+      if (this.input.cVars.invisible)
+        this.c = "rgba(0, 0, 0, 0)";
+      else
+        this.c = this.oc;
+      if (this.input.cVars.smallPlayer) {
+        this.w = 16;
+        this.h = 16;
+      } else {
+        this.w = 48;
+        this.h = 48;
+      }
+      // input
+      // calculate max accelleration
+      let max = 1;
+      if (this.input.cVars.superSpeed)
+        max = 20;
+      else if (this.input.keys.includes("Shift"))
+        max = 2;
+      // add accelleration
+      if ((this.input.keys.includes("w") || this.input.keys.includes("W") || this.input.keys.includes("ArrowUp")) && this.vx > -max)
+        this.vy -= 0.2;
+      if ((this.input.keys.includes("a") || this.input.keys.includes("A") || this.input.keys.includes("ArrowLeft")) && this.vx > -max)
+        this.vx -= 0.2;
+      if ((this.input.keys.includes("s") || this.input.keys.includes("S") || this.input.keys.includes("ArrowDown")) && this.vx < max)
+        this.vy += 0.2;
+      if ((this.input.keys.includes("d") || this.input.keys.includes("D") || this.input.keys.includes("ArrowRight")) && this.vx < max)
+        this.vx += 0.2;
+      // friction
+      this.vx *= 0.6;
+      this.vy *= 0.6;
+      // map collsions
+      for (let layer of map) {
+        for (let tile of layer) {
+          if (tile.c === "rgb(0, 150, 25)") // background tile
+            continue;
+          let dir = edgeCollision(self, tile); // collision check on the player/tile
+          if (dir === "h") // horizontal collision
+            this.vx = 0;
+          if (dir === "v") // vertical collision
+            this.vy = 0;
+        }
+      }
+      // map boundaries
+      if (this.x + this.vx <= 0 || this.x + this.w + this.vx >= 1056)
+        this.vx = 0;
+      if (this.y + this.vy <= 0 || this.y + this.h + this.vy >= 1344)
+        this.vy = 0;
+      // move after collision and input checks
+      this.x += this.vx;
+      this.y += this.vy;
+      // player shoots paintball
+      if (this.input.mouse.down && this.loaded) {
+        let paintball = Paintball(self); // instantiate new object
+        paintballs.push(paintball); // add object to paintballs
+
+        setTimeout(function (paintball) { // paintball decay/range
+          paintballs.splice(paintballs.indexOf(paintball), 1);
+        }, 5000, paintball);
+        // cooldown
+        this.loaded = false;
+        setTimeout(function (player) { // timer to end cooldown
+          player.loaded = true;
+        }, 500, self);
+      }
+    }
+  };
+}
+function Paintball(parent) {
+  // calculate paintball trajectory
+  var cx = parent.x + parent.w / 2;
+  var cy = parent.y + parent.h / 2;
+  var angle = Math.atan2(parent.input.mouse.y - cy, parent.input.mouse.x - cx);
+
+  return {
+    parent: parent,
+    x: cx,
+    y: cy,
+    r: 5,
+    w: 5,
+    h: 5,
+    vx: Math.cos(angle) * 6,
+    vy: Math.sin(angle) * 6,
+    dir: angle,
+    c: parent.c,
+    update: function () {
+      var self = this; // scoping purposes
+      // movement
+      this.x += this.vx;
+      this.y += this.vy;
+      // player collision detection
+      for (let player of players) {
+        if (!rectCollision(self, player) || player === self.parent) // no collision or collision with parent
+          continue;
+        if (!player.cVars.godMode) // take damage unless cheat enabled
+          player.health -= 25;
+        if (player.health <= 0) { // player respawns
+          respawn(player);
+          console.log("Player respawned: " + player.name);
+        }
+        paintballs.splice(paintballs.indexOf(self), 1); // remove paintball on collision
+      }
+      // map collision detection
+      for (let layer of map) {
+        for (let tile of layer) {
+          if (tile.c === "rgb(0, 150, 25)") // background tile
+            continue;
+          if (tileCollision(self, tile)) // delete the paintball after collision
+            paintballs.splice(paintballs.indexOf(self), 1);
+        }
+      }
+    }
+  };
+}
 // utility functions
 function rectCollision(obj1, obj2) {
   return (
@@ -32,7 +183,6 @@ function rectCollision(obj1, obj2) {
     obj1.y + obj1.h > obj2.y
   );
 }
-
 function tileCollision(obj1, obj2) {
   return (
     obj1.x < obj2.x + 48 &&
@@ -41,261 +191,98 @@ function tileCollision(obj1, obj2) {
     obj1.y + obj1.h > obj2.y
   );
 }
-
-function edgeCollision(obj1, obj2) {
-  var velX = obj1.x + obj1.w / 2 - (obj2.x + 48 / 2);
-  var velY = obj1.y + obj1.h / 2 - (obj2.y + 48 / 2);
-  var hws = obj1.w / 2 + 48 / 2;
-  var hhs = obj1.h / 2 + 48 / 2;
-  var colDir = null;
-  if (Math.abs(velX) < hws && Math.abs(velY) < hhs) {
-    var oX = hws - Math.abs(velX);
-    var oY = hhs - Math.abs(velY);
-    if (oX >= oY) {
-      if (velY > 0) {
-        colDir = "t";
+function edgeCollision(obj1, obj2) { // adjust movement along tile edges
+  let vx = obj1.x + obj1.w / 2 - (obj2.x + 48 / 2);
+  let vy = obj1.y + obj1.h / 2 - (obj2.y + 48 / 2);
+  let hws = obj1.w / 2 + 48 / 2;
+  let hhs = obj1.h / 2 + 48 / 2;
+  let res = null;
+  if (Math.abs(vx) < hws && Math.abs(vy) < hhs) { // collision detected
+    let oX = hws - Math.abs(vx);
+    let oY = hhs - Math.abs(vy);
+    if (oX >= oY) { // vertical collision
+      if (vy > 0) { // collision upwards
+        res = "v";
         obj1.y += oY;
-      } else {
-        colDir = "b";
+      } else { // collsion downwards
+        res = "v";
         obj1.y -= oY;
       }
-    } else {
-      if (velX > 0) {
-        colDir = "l";
+    } else { // horizontal collision
+      if (vx > 0) { // collsion left
+        res = "h";
         obj1.x += oX;
-      } else {
-        colDir = "r";
+      } else { // collsion right
+        res = "h";
         obj1.x -= oX;
       }
     }
   }
-  return colDir;
+  return res;
 }
-
-function respawn(id) {
-  players[id].x = players[id].spawn.x;
-  players[id].y = players[id].spawn.y;
-  players[id].health = 100;
-  players[id].loaded = true;
+function respawn(player) { // respawn a player object
+  player = {
+    ...player,
+    x: this.spawn.x,
+    y: this.spawn.y,
+    vx: 0,
+    vy: 0,
+    health: 100,
+    loaded: true,
+  };
 }
 // player connects
 io.on("connection", function (socket) {
-  console.log("an user connected; id: " + socket.id);
+  console.log("A user connected; id: " + socket.id);
+  
+  let player = Player(socket); // create player object
+  socket.player = player; // reference player to client
+  players.push(socket.player); // add player to data
 
-  var r = Math.round(Math.random());
-
-  socket.player = {
-    id: socket.id,
-    x: spawnPoints[r].x,
-    y: spawnPoints[r].y,
-    spawn: spawnPoints[r],
-    w: 48,
-    h: 48,
-    c: "rgb(" +
-      Math.random() * 255 +
-      "," +
-      Math.random() * 255 +
-      "," +
-      Math.random() * 255 +
-      ")",
-    loaded: true,
-    health: 100,
-    vx: 0,
-    vy: 0,
-    cVars: {
-      godMode: false,
-      invisible: false,
-      smallPlayer: false,
-      superSpeed: false
-    }
-  };
-  socket.player.oc = socket.player.c;
-
-  players[String(socket.id)] = socket.player;
-
-  var data = {
-    map: map,
-    player: socket.player,
-    players: players,
-    bullets: bullets
-  };
-
-  setInterval(function () {
-    // update bullets
-    for (var obj of bullets) {
-      obj.update();
-    }
-  }, 1000 / 60);
-
-  socket.on("username", function (data) {
+  socket.on("username", function (data) { // client submits username
     // player chooses username
-    console.log("username chosen: " + data);
-    socket.player.user = data;
-  });
+    console.log("Username chosen: " + data);
+    socket.player.name = data;
 
-  socket.emit("init", data);
-
-  socket.on("clientUpdate", function (data) {
-    // player pings server
-    // cheats
-    socket.player.cVars = data.cVars;
-    if (socket.player.cVars.invisible) socket.player.c = "rgba(0, 0, 0, 0)";
-    else socket.player.c = socket.player.oc;
-    if (socket.player.cVars.smallPlayer) {
-      socket.player.w = 16;
-      socket.player.h = 16;
-    } else {
-      socket.player.w = 48;
-      socket.player.h = 48;
-    }
-    // input
-    var max = 1;
-    if (socket.player.cVars.superSpeed) {
-      max = 20;
-    } else if (data.keys.includes("Shift")) {
-      max = 2;
-    }
-    if (
-      (data.keys.includes("w") ||
-        data.keys.includes("W") ||
-        data.keys.includes("ArrowUp")) &&
-      socket.player.vx > -max
-    )
-      socket.player.vy -= 0.2;
-    if (
-      (data.keys.includes("a") ||
-        data.keys.includes("A") ||
-        data.keys.includes("ArrowLeft")) &&
-      socket.player.vx > -max
-    )
-      socket.player.vx -= 0.2;
-    if (
-      (data.keys.includes("s") ||
-        data.keys.includes("S") ||
-        data.keys.includes("ArrowDown")) &&
-      socket.player.vx < max
-    )
-      socket.player.vy += 0.2;
-    if (
-      (data.keys.includes("d") ||
-        data.keys.includes("D") ||
-        data.keys.includes("ArrowRight")) &&
-      socket.player.vx < max
-    )
-      socket.player.vx += 0.2;
-    // friction
-    socket.player.vx *= 0.6;
-    socket.player.vy *= 0.6;
-
-    for (var layer of map) {
-      // map collisions
-      for (var tile of layer) {
-        if (tile.c === "rgb(0, 150, 25)") continue;
-        var dir = edgeCollision(socket.player, tile);
-        if (dir === "l" || dir === "r") socket.player.vx = 0;
-        if (dir === "t" || dir === "b") socket.player.vy = 0;
-      }
-    }
-    if (
-      socket.player.x + socket.player.vx <= 0 ||
-      socket.player.x + socket.player.w + socket.player.vx >= 1056
-    )
-      socket.player.vx = 0;
-    if (
-      socket.player.y + socket.player.vy <= 0 ||
-      socket.player.y + socket.player.h + socket.player.vy >= 1344
-    )
-      socket.player.vy = 0;
-
-    socket.player.x += socket.player.vx;
-    socket.player.y += socket.player.vy;
-
-    if (data.mouse.down && socket.player.loaded) {
-      // player shoots
-      var cx = socket.player.x + socket.player.w / 2;
-      var cy = socket.player.y + socket.player.h / 2;
-
-      var angle = Math.atan2(data.mouse.y - cy, data.mouse.x - cx);
-
-      var id;
-      bullets.length > 0 ? (id = bullets.length - 1) : (id = 0);
-
-      var b = bullets.push({
-        ply: socket.player,
-        id: id,
-        x: cx,
-        y: cy,
-        w: 15,
-        h: 10,
-        vx: Math.cos(angle) * 6,
-        vy: Math.sin(angle) * 6,
-        dir: angle,
-        c: "rgb(75, 75, 75)",
-        update: function () {
-          var t = this; // for use in function scope
-
-          this.x += this.vx;
-          this.y += this.vy;
-
-          for (var i in players) {
-            // player hit detection
-            if (players[i] === undefined || players[i].user === undefined)
-              continue;
-            if (!rectCollision(t, players[i]) || players[i] === t.ply) continue;
-            if (!players[i].cVars.godMode) players[i].health -= 25;
-            if (players[i].health <= 0) {
-              respawn(i);
-              console.log("Player died: " + players[i].user);
-            }
-            bullets.splice(bullets.indexOf(t), 1);
-          }
-
-          for (var layer of map) {
-            // map collisions
-            for (var tile of layer) {
-              if (tile.c === "rgb(0, 150, 25)") continue;
-              if (tileCollision(t, tile)) bullets.splice(bullets.indexOf(t));
-            }
-          }
-        }
-      });
-
-      socket.player.loaded = false;
-
-      setTimeout(function () {
-        // bullet decay
-        if (bullets[b - 1] !== undefined) {
-          if (bullets[b - 1].id === b - 1) {
-            bullets.splice(bullets[b - 1]);
-          }
-        }
-      }, 5000);
-
-      setTimeout(function () {
-        // shooting cooldown
-        socket.player.loaded = true;
-      }, 500);
-    }
-
-    players[String(socket.id)] = socket.player;
-
-    data = {
+    data = { // initial client data
       map: map,
       player: socket.player,
       players: players,
-      bullets: bullets
+      paintballs: paintballs,
+      map: map
     };
-
-    socket.emit("serverUpdate", data);
+    socket.emit("init", data); // send initial data to client
   });
 
-  socket.on("disconnect", function () {
-    // player disconnected
-    players[String(socket.id)] = undefined;
-    console.log("user disconnected");
+  socket.on("clientUpdate", function (data) { // player pings server
+    socket.player.input = data; // collect new input data
+
+    data = { // update data
+      map: map,
+      player: socket.player,
+      players: players,
+      paintballs: paintballs,
+      map: map
+    };
+
+    socket.emit("serverUpdate", data); // send new data to client
+  });
+
+  socket.on("disconnect", function () { // client disconnected
+    console.log("User disconnected: " + socket.id);
+    players.splice(players.indexOf(socket.player), 1); // remove player data
   });
 });
 // start server
-http.listen(8080, function () {
-  console.log("listening");
+http.listen(PORT, function () {
+  console.log("Listening on port: " + PORT);
 });
+// run game update loop
+setInterval(function () {
+  // update players
+  for (let player of players)
+    player.update();
+  // update paintballs
+  for (let paintball of paintballs)
+    paintball.update();
+}, 1000 / TPS);

@@ -18,10 +18,10 @@ let centerY = 0;
 
 let translationX = 0;
 let translationY = 0;
-// object variables
-let player, players, bullets;
+// game data
+let player, players, paintballs, map;
 // console cheats
-var cVars = {
+let cVars = {
   godMode: false,
   invisible: false,
   smallPlayer: false,
@@ -65,7 +65,8 @@ socket.on("init", function(data) {
   // initialize data
   player = data.player;
   players = data.players;
-  bullets = data.bullets;
+  paintballs = data.paintballs;
+  map = data.map;
 
   translationX = centerX - player.x;
   translationY = centerY - player.y;
@@ -91,7 +92,8 @@ socket.on("serverUpdate", function(data) {
 
   player = data.player;
   players = data.players;
-  bullets = data.bullets;
+  paintballs = data.paintballs;
+  map = data.map;
 
   translationX = centerX - player.x;
   translationY = centerY - player.y;
@@ -153,45 +155,26 @@ function render() {
       // clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      for (var layer of map) {
-        // draw map
+      for (var layer of map) { // draw map
         for (var tile of layer) {
           ctx.fillStyle = tile.c;
           ctx.fillRect(tile.x + translationX, tile.y + translationY, 48, 48);
         }
       }
 
-      for (var i in players) {
+      for (let obj in players) {
         // draw players
-        if (players[i].id === player.id || players[i].user === undefined) continue;
+        if (obj.id === player.id || obj.name === undefined)
+          continue;
         //draw player
-        ctx.fillStyle = players[i].c;
-        ctx.fillRect(
-          players[i].x + translationX,
-          players[i].y + translationY,
-          players[i].w,
-          players[i].h
-        );
+        ctx.fillStyle = obj.c;
+        ctx.fillRect(obj.x + translationX, obj.y + translationY, obj.w, obj.h);
         // health bar
         ctx.fillStyle = "rgb(255, 0, 0)";
-        ctx.fillRect(
-          players[i].x + translationX,
-          players[i].y + translationY - 25,
-          players[i].health / 2,
-          15
-        );
-        ctx.strokeRect(
-          players[i].x + translationX,
-          players[i].y + translationY - 25,
-          50,
-          15
-        );
+        ctx.fillRect(obj.x + translationX, obj.y + translationY - 25, obj.health / 2, 15);
+        ctx.strokeRect(obj.x + translationX, obj.y + translationY - 25, 50, 15);
         // draw username
-        ctx.fillText(
-          players[i].user,
-          players[i].x + translationX,
-          players[i].y + translationY - 50
-        );
+        ctx.fillText(obj.name, obj.x + translationX, obj.y + translationY - 50);
       }
       // draw player
       ctx.fillStyle = player.c;
@@ -200,21 +183,13 @@ function render() {
       ctx.fillStyle = "rgb(255, 0, 0)";
       ctx.fillRect(25, window.innerHeight - 50, player.health, 25);
       ctx.strokeRect(25, window.innerHeight - 50, 100, 25);
-
-      for (var obj of bullets) {
-        // draw bullets
-        let tx = obj.x + translationX;
-        let ty = obj.y + translationY;
-        // rotate canvas
-        ctx.save();
-        ctx.translate(tx, ty);
-        ctx.rotate(obj.dir);
-        ctx.translate(-tx, -ty);
-        // draw bullet
-        ctx.fillStyle = obj.c;
-        ctx.fillRect(tx, ty, obj.w, obj.h);
-        // revert canvas rotation
-        ctx.restore();
+      for (let paintball of paintballs) { // draw paintballs
+        // calculate relative position
+        let tx = paintball.x + translationX;
+        let ty = paintball.y + translationY;
+        // draw paintball
+        ctx.fillStyle = paintball.c;
+        ctx.arc(tx, ty, paintball.r, 0, 2 * Math.PI);
       }
     });
   }, 1000/FPS);
