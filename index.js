@@ -7,7 +7,7 @@ let io = require("socket.io")(http);
 
 let map = require("./map.js").map;
 // global variables
-const TPS = 60; // game ticks/second
+const TPS = 500; // game ticks/second
 const PORT = 8080; // game server port
 // track game objects
 let players = [];
@@ -117,7 +117,9 @@ function Player(socket) {
         paintballs.push(paintball); // add object to paintballs
 
         setTimeout(function (paintball) { // paintball decay/range
-          paintballs.splice(paintballs.indexOf(paintball), 1);
+          let i = paintballs.indexOf(paintball); // find paintball object
+          if (i !== -1) // check if object still exists
+            paintballs.splice(i, 1); // remove paintball
         }, 5000, paintball);
         // cooldown
         this.loaded = false;
@@ -135,14 +137,15 @@ function Paintball(parent) {
   var angle = Math.atan2(parent.input.mouse.y - cy, parent.input.mouse.x - cx);
 
   return {
+    id: Math.random(),
     parent: parent,
     x: cx,
     y: cy,
     r: 5,
     w: 5,
     h: 5,
-    vx: Math.cos(angle) * 6,
-    vy: Math.sin(angle) * 6,
+    vx: Math.cos(angle),
+    vy: Math.sin(angle),
     dir: angle,
     c: parent.c,
     update: function () {
@@ -167,8 +170,9 @@ function Paintball(parent) {
         for (let tile of layer) {
           if (tile.c === "rgb(0, 150, 25)") // background tile
             continue;
-          if (tileCollision(self, tile)) // delete the paintball after collision
-            paintballs.splice(paintballs.indexOf(self), 1);
+          let i = paintballs.indexOf(self);
+          if (tileCollision(self, tile) && i !== -1) // delete the paintball after collision
+            paintballs.splice(i, 1);
         }
       }
     }

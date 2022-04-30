@@ -189,7 +189,10 @@ function render() {
         let ty = paintball.y + translationY;
         // draw paintball
         ctx.fillStyle = paintball.c;
+        ctx.beginPath();
         ctx.arc(tx, ty, paintball.r, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.closePath();
       }
     });
   }, 1000/FPS);
