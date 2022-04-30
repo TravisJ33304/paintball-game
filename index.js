@@ -28,18 +28,18 @@ app.get("/", function (req, res) {
 // object classes
 function Player(socket) {
   // determine players team
-  let side = players.length % 2;
-  let team = side ? "red" : "blue";
+  var side = players.length % 2;
+  var team = side ? "red" : "blue";
   // create object
   return {
     id: socket.id,
+    team: team,
     spawn: spawnPoints[side],
-    x: this.spawn.x,
-    y: this.spawn.y,
+    x: spawnPoints[side].x,
+    y: spawnPoints[side].y,
     w: 48,
     h: 48,
     c: team,
-    oc: this.c,
     loaded: true,
     health: 100,
     vx: 0,
@@ -64,7 +64,7 @@ function Player(socket) {
       if (this.input.cVars.invisible)
         this.c = "rgba(0, 0, 0, 0)";
       else
-        this.c = this.oc;
+        this.c = this.team;
       if (this.input.cVars.smallPlayer) {
         this.w = 16;
         this.h = 16;
