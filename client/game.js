@@ -164,7 +164,7 @@ function render() {
 
       for (let obj of players) {
         // draw players
-        if (obj.id === player.id || player.name === undefined)
+        if (obj.id === player.id || !player.name)
           continue;
         //draw player
         ctx.fillStyle = obj.c;
