@@ -157,7 +157,7 @@ function Paintball(parent) {
       for (let player of players) {
         if (!rectCollision(self, player) || player === self.parent) // no collision or collision with parent
           continue;
-        if (!player.cVars.godMode) // take damage unless cheat enabled
+        if (!player.input.cVars.godMode) // take damage unless cheat enabled
           player.health -= 25;
         if (player.health <= 0) { // player respawns
           respawn(player);
@@ -225,15 +225,12 @@ function edgeCollision(obj1, obj2) { // adjust movement along tile edges
   return res;
 }
 function respawn(player) { // respawn a player object
-  player = {
-    ...player,
-    x: this.spawn.x,
-    y: this.spawn.y,
-    vx: 0,
-    vy: 0,
-    health: 100,
-    loaded: true,
-  };
+  player.x = player.spawn.x;
+  player.y = player.spawn.y;
+  player.vx = 0;
+  player.vy = 0;
+  player.health = 100;
+  player.loaded = true;
 }
 // player connects
 io.on("connection", function (socket) {
@@ -244,10 +241,8 @@ io.on("connection", function (socket) {
   players.push(socket.player); // add player to data
 
   socket.on("username", function (data) { // client submits username
-    // player chooses username
     console.log("Username chosen: " + data);
-    socket.player.name = data;
-
+    socket.player.name = data; // store username
     data = { // initial client data
       map: map,
       player: socket.player,
@@ -260,7 +255,6 @@ io.on("connection", function (socket) {
 
   socket.on("clientUpdate", function (data) { // player pings server
     socket.player.input = data; // collect new input data
-
     data = { // update data
       map: map,
       player: socket.player,
@@ -268,7 +262,6 @@ io.on("connection", function (socket) {
       paintballs: paintballs,
       map: map
     };
-
     socket.emit("serverUpdate", data); // send new data to client
   });
 

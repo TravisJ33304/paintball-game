@@ -155,8 +155,8 @@ function render() {
       // clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      for (var layer of map) { // draw map
-        for (var tile of layer) {
+      for (let layer of map) { // draw map
+        for (let tile of layer) {
           ctx.fillStyle = tile.c;
           ctx.fillRect(tile.x + translationX, tile.y + translationY, 48, 48);
         }
@@ -164,7 +164,8 @@ function render() {
 
       for (let obj in players) {
         // draw players
-        if (obj.id === player.id || obj.name === undefined)
+        console.log(obj.id === player.id);
+        if (obj.id === player.id)
           continue;
         //draw player
         ctx.fillStyle = obj.c;
