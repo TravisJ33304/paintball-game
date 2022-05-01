@@ -162,10 +162,9 @@ function render() {
         }
       }
 
-      for (let obj in players) {
+      for (let obj of players) {
         // draw players
-        console.log(obj.id === player.id);
-        if (obj.id === player.id)
+        if (obj.id === player.id || player.name === undefined)
           continue;
         //draw player
         ctx.fillStyle = obj.c;
